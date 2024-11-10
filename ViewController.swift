@@ -13,19 +13,19 @@ class ViewController: UITableViewController {
     var usedWords = [String]()
     var gameLanguage = String()
     
+    var tempWord = String()
+    var tempWordUA = String()
+    var tempWordEN = String()
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        loadScores()
         
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(promptForAnswer))
         
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Нове слово", style: .plain, target: self, action: #selector(startGame))
         
-//        if let startWordsURL = Bundle.main.url(forResource: "start", withExtension: "txt") {
-//            if let startWords = try? String(contentsOf: startWordsURL) {
-//                allWords = startWords.components(separatedBy: "\n")
-//            }
-//        }
         
         if allWords.isEmpty {
             allWords = ["silkworm"]
@@ -33,53 +33,74 @@ class ViewController: UITableViewController {
         
         chooseGameMode()
         
-        //startGame()
     }
     
     func chooseGameMode() {
-            let ac = UIAlertController(title: "Виберіть режим гри", message: nil, preferredStyle: .alert)
-            
-            let enMode = UIAlertAction(title: "EN", style: .default) { [weak self] _ in
-                self?.gameLanguage = "en"
-                self?.loadWords(from: "start")
-                self?.startGame()
-            }
-            
-            let uaMode = UIAlertAction(title: "UA", style: .default) { [weak self] _ in
-                self?.gameLanguage = "uk"
-                self?.loadWords(from: "start_ua")
-                self?.startGame()
-            }
-            
-            ac.addAction(enMode)
-            ac.addAction(uaMode)
-            present(ac, animated: true)
+        let ac = UIAlertController(title: "Виберіть режим гри", message: nil, preferredStyle: .alert)
+        
+        let enMode = UIAlertAction(title: "EN", style: .default) { [weak self] _ in
+            self?.gameLanguage = "en"
+            self?.loadWords(from: "start")
+            self?.start()
         }
+        
+        let uaMode = UIAlertAction(title: "UA", style: .default) { [weak self] _ in
+            self?.gameLanguage = "uk"
+            self?.loadWords(from: "start_ua")
+            self?.start()
+            
+        }
+        
+        ac.addAction(enMode)
+        ac.addAction(uaMode)
+        present(ac, animated: true)
+    }
     
     func loadWords(from fileName: String) {
-            if let startWordsURL = Bundle.main.url(forResource: fileName, withExtension: "txt") {
-                if let startWords = try? String(contentsOf: startWordsURL) {
-                    allWords = startWords.components(separatedBy: "\n")
-                }
-            }
-            
-            if allWords.isEmpty {
-                allWords = ["silkworm"]
+        if let startWordsURL = Bundle.main.url(forResource: fileName, withExtension: "txt") {
+            if let startWords = try? String(contentsOf: startWordsURL) {
+                allWords = startWords.components(separatedBy: "\n")
             }
         }
+        
+        if allWords.isEmpty {
+            allWords = ["silkworm"]
+        }
+    }
+    
+    func start() {
+ 
+        if tempWord.isEmpty {
+            title = allWords.randomElement()
+            usedWords = []
+            tempWord = title ?? ""
+        } else {
+            title = tempWord
+        }
+        tableView.reloadData()
+        print("START  Из загрузки  --- \(title)")
+    }
+    
     
     @objc func startGame() {
+        
         title = allWords.randomElement()
+        print("START-GAME Из загрузки  --- \(title)")
+        
         usedWords.removeAll(keepingCapacity: true)
         tableView.reloadData()
+        tempWord.removeAll()
+        saveScores()
     }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return usedWords.count
     }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "Word", for: indexPath)
+        
         cell.textLabel?.text = usedWords[indexPath.row]
         return cell
+        tableView.reloadData()
     }
     @objc func promptForAnswer() {
         let ac = UIAlertController(title: "Введіть відповідь", message: nil, preferredStyle: .alert)
@@ -101,6 +122,9 @@ class ViewController: UITableViewController {
                 if isReal(word: lowerAnswer) {
                     if notRulles(word: lowerAnswer) {
                         usedWords.insert(answer, at: 0)
+                        
+                        print(usedWords)
+                        saveScores()
                         
                         let indexPath = IndexPath(row: 0, section: 0)
                         tableView.insertRows(at: [indexPath], with: .automatic)
@@ -149,7 +173,7 @@ class ViewController: UITableViewController {
         let checker = UITextChecker()
         let range = NSRange(location: 0, length: word.utf16.count)
         let misspelledRange = checker.rangeOfMisspelledWord(in: word, range: range, startingAt: 0, wrap: false, language: gameLanguage)
-    
+        
         return misspelledRange.location == NSNotFound
         
     }
@@ -162,4 +186,28 @@ class ViewController: UITableViewController {
         return true
     }
     
+    func saveScores() {
+        let defaults = UserDefaults.standard
+        let jsonEncoder = JSONEncoder()
+        
+        if let savedTempWord = try? jsonEncoder.encode(tempWord),
+           let savedUsedWords = try? jsonEncoder.encode(usedWords) {
+            defaults.set(savedTempWord, forKey: "tempWord")
+            defaults.set(savedUsedWords, forKey: "usedWords")
+        }
+        print("Cохранение tempWord: \(tempWord), usedWords: \(usedWords)")
+    }
+    
+    func loadScores() {
+        let defaults = UserDefaults.standard
+        let jsonDecoder = JSONDecoder()
+        
+        if let savedTempWord = defaults.data(forKey: "tempWord"),
+           let savedUsedWords = defaults.data(forKey: "usedWords") {
+            tempWord = (try? jsonDecoder.decode(String.self, from: savedTempWord)) ?? "silkworm"
+            usedWords = (try? jsonDecoder.decode([String].self, from: savedUsedWords)) ?? []
+            
+            print("Загрузка tempWord: \(tempWord), usedWords: \(usedWords)")
+        }
+    }
 }
